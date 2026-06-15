@@ -33,9 +33,15 @@ jobs:
         run: |
           set -euo pipefail
           tmp="$(mktemp)"
-          curl -fsSL "$SRC" -o "$tmp"
-          # Fail closed if the fetch returned something other than our formula (e.g. a
-          # 404 page) — never commit garbage over the working formula.
+          # Soft no-op if the source isn't fetchable yet (e.g. the formula hasn't
+          # landed on main, or a transient blip): the tap keeps its current valid
+          # formula and the next run retries. Don't fail the scheduled job for that.
+          if ! curl -fsSL "$SRC" -o "$tmp"; then
+            echo "::notice::could not fetch $SRC (not on main yet?) — skipping this run"
+            exit 0
+          fi
+          # But DO fail closed if the fetch returned a non-formula (e.g. a 200 error
+          # page) — never commit garbage over the working formula.
           if ! grep -q '^class Clauster < Formula' "$tmp"; then
             echo "::error::fetched content is not the clauster formula"
             exit 1
